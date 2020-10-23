@@ -140,6 +140,7 @@ class _ValidateEvent:
                 if cached_member is not None and pred(cached_member, member) is True:
                     cached_member.clan = cached_clan
                     member.clan = clan
+                    LOG.debug('Running %s callback for %s', callback, member)
                     await callback(cached_member, member)
 
         return wrapped
@@ -942,8 +943,6 @@ class EventsClient(Client):
 
     async def _run_clan_update(self, index, clan_tag):
         # pylint: disable=protected-access, broad-except
-        await asyncio.sleep(0.005 * index)
-
         key = "clan:{}".format(clan_tag)
         try:
             lock = self._locks[key]
@@ -954,7 +953,7 @@ class EventsClient(Client):
 
         try:
             clan = await self.get_clan(clan_tag, cls=self.clan_cls)
-            LOG.debug('Player updater returned %s')
+            LOG.debug('Clan updater returned %s', clan)
         except Maintenance:
             self._safe_unlock(lock)
             LOG.debug('API is in maintenance')
@@ -965,8 +964,8 @@ class EventsClient(Client):
             return
 
         # sleep for either the global retry or whenever a new player object is available, whichever is smaller.
-        LOG.debug('Unlocking lock in %s', max(clan._response_retry, self.clan_retry_interval))
-        self.loop.call_later(max(clan._response_retry, self.clan_retry_interval), self._safe_unlock, lock)
+        LOG.debug('Unlocking lock in %s', max(clan._response_retry + 1, self.clan_retry_interval))
+        self.loop.call_later(max(clan._response_retry + 1, self.clan_retry_interval), self._safe_unlock, lock)
 
         cached_clan = self._get_cached_clan(clan_tag)
         self._update_clan(clan)
@@ -977,7 +976,6 @@ class EventsClient(Client):
             return
 
         for listener in self._listeners["clan"]:
-            LOG.debug('Running listener: %s for clan: %s', listener, clan)
             if listener.tags and clan_tag not in listener.tags:
                 continue
             await listener(cached_clan, clan)
