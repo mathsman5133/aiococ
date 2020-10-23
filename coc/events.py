@@ -954,8 +954,10 @@ class EventsClient(Client):
 
         try:
             clan = await self.get_clan(clan_tag, cls=self.clan_cls)
+            LOG.debug('Player updater returned %s')
         except Maintenance:
             self._safe_unlock(lock)
+            LOG.debug('API is in maintenance')
             return
         except (Exception, BaseException) as exception:
             self.dispatch("event_error", exception)
@@ -963,6 +965,7 @@ class EventsClient(Client):
             return
 
         # sleep for either the global retry or whenever a new player object is available, whichever is smaller.
+        LOG.debug('Unlocking lock in %s', max(clan._response_retry, self.clan_retry_interval))
         self.loop.call_later(max(clan._response_retry, self.clan_retry_interval), self._safe_unlock, lock)
 
         cached_clan = self._get_cached_clan(clan_tag)
@@ -970,9 +973,11 @@ class EventsClient(Client):
 
         if not cached_clan:
             self._safe_unlock(lock)
+            LOG.debug('No cached clan for %s', clan)
             return
 
         for listener in self._listeners["clan"]:
+            LOG.debug('Running listener: %s for clan: %s', listener, clan)
             if listener.tags and clan_tag not in listener.tags:
                 continue
             await listener(cached_clan, clan)
